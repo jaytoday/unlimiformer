@@ -17,7 +17,6 @@
 Fine-tuning the library models for sequence to sequence.
 """
 # You can also adapt this script on your own sequence to sequence task. Pointers for this are left as comments.
-from scipy.stats import boltzmann
 import logging
 import os
 import sys
@@ -37,7 +36,7 @@ import torch
 sys.path.insert(0, os.path.dirname(__file__))  # seq2seq package path
 sys.path.insert(0, os.getcwd())
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import List, Optional
 import json
 from copy import deepcopy
@@ -305,7 +304,7 @@ class DataTrainingArguments:
         default=None,
     )
     length_penalty: Optional[float] = field(
-        default=None,
+        default=1.0,
     )
     extra_metrics: Optional[List[str]] = field(
         default=None,
@@ -621,7 +620,7 @@ def main():
             untokenized_train_dataset = untokenized_train_dataset.select(range(data_args.max_train_samples))
 
         if DEBUG:
-            # In debug mode, we want ot recreate the data
+            # In debug mode, we want to recreate the data
             data_args.shared_storage = False
             data_args.overwrite_cache = True
         with training_args.main_process_first(
@@ -703,12 +702,12 @@ def main():
         untokenized_eval_dataset_orig = untokenized_eval_dataset
         assert training_args.eval_fraction > 0
         n = len(untokenized_eval_dataset)
-        training_args.eval_fraction = min(training_args.eval_fraction, n)
+        training_args = replace(training_args, eval_fraction = min(training_args.eval_fraction, n))
         if training_args.eval_fraction != 1:
             if training_args.eval_fraction > 1:
                 assert training_args.eval_fraction == int(training_args.eval_fraction)
                 logger.info(f'using predetermined absolute samples from eval set ({training_args.eval_fraction} )')
-                training_args.eval_fraction = training_args.eval_fraction / n
+                training_args = replace(training_args, eval_fraction = training_args.eval_fraction / n)
             indices = np.random.permutation(n)[:int(np.ceil(max(1, training_args.eval_fraction * n)))]
             untokenized_eval_dataset = type(untokenized_eval_dataset).from_dict(untokenized_eval_dataset[indices])
             logger.info(f'During training, will only use {training_args.eval_fraction:.3%} samples of the eval set '
@@ -944,7 +943,7 @@ def _get_dataset(data_args, model_args, training_args):
     seq2seq_dataset = load_dataset(
         data_args.dataset_name,
         data_args.dataset_config_name,
-        ignore_verifications=True,
+        verification_mode='no_checks',
         cache_dir=model_args.cache_dir,
         data_dir=data_args.data_dir,
         data_files=data_files,
